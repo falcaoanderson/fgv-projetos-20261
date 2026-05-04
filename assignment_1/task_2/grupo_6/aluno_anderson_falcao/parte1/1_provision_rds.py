@@ -180,7 +180,7 @@ def provision_rds(cfg: dict) -> dict:
         # aguarda 'available' mesmo quando a instância já existe,
         # caso esteja em estado intermediário como 'creating' ou 'modifying'.
         if status != "available":
-            print(f"      Status '{status}' — aguardando ficar disponível...")
+            print(f"      Status '{status}' - aguardando ficar disponível...")
             waiter = rds.get_waiter("db_instance_available")
             waiter.wait(
                 DBInstanceIdentifier=cfg["db_instance_id"],
@@ -253,7 +253,7 @@ def save_credentials(creds: dict, filepath: str) -> None:
 
 def main():
     print("=" * 55)
-    print("  Provisionamento RDS MySQL — classicmodels lab")
+    print("  Provisionamento RDS MySQL - classicmodels lab")
     print("=" * 55)
 
     # valida config antes de qualquer chamada AWS

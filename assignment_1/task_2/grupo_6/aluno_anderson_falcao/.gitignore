@@ -1,2 +1,4 @@
 .env
 rds_credentials.json
+terraform.tfvars
+diretrizes.md

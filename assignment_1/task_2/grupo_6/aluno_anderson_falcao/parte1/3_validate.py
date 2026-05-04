@@ -1,5 +1,5 @@
 """
-Validação — verifica se todas as tabelas foram criadas
+Validação - verifica se todas as tabelas foram criadas
 e populadas corretamente no banco classicmodels
 """
 
@@ -206,7 +206,7 @@ def print_table(cols: list[str], rows: list[tuple]) -> None:
 
 def main():
     print("=" * 55)
-    print("  Validação do banco classicmodels — RDS MySQL")
+    print("  Validação do banco classicmodels - RDS MySQL")
     print("=" * 55)
 
     creds = load_credentials(CREDENTIALS_FILE)
@@ -259,7 +259,7 @@ def main():
     for r in fk_results:
         if r.get("error"):
             all_ok = False
-            print(f"  X {r['name']}: erro — {r['error']}")
+            print(f"  X {r['name']}: erro - {r['error']}")
         elif r["ok"]:
             print(f"  OK {r['name']}: sem órfãos")
         else:
@@ -284,7 +284,7 @@ def main():
         print("  OK Banco classicmodels validado com sucesso!")
         print("     O RDS está pronto para ser usado como origem do pipeline.")
     else:
-        print("  X Foram encontrados problemas — revise os itens acima.")
+        print("  X Foram encontrados problemas - revise os itens acima.")
         print("     Tente re-executar:  python 2_load_data.py")
 
     cur.close()

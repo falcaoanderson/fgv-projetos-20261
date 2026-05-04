@@ -172,7 +172,7 @@ def step_load_sql(creds: dict, sql_file: str) -> None:
         # rollback explícito: desfaz tudo se algo crítico falhar
         if conn:
             conn.rollback()
-        raise RuntimeError(f"Falha na carga de dados — rollback executado: {exc}") from exc
+        raise RuntimeError(f"Falha na carga de dados - rollback executado: {exc}") from exc
     finally:
         # fecha recursos sempre, independentemente de sucesso ou falha
         if cur:
@@ -194,7 +194,7 @@ def step_quick_check(creds: dict) -> None:
         if tables:
             print(f"  OK {len(tables)} tabela(s) encontrada(s): {', '.join(tables)}")
         else:
-            print("  X Nenhuma tabela encontrada — verifique o arquivo SQL.")
+            print("  X Nenhuma tabela encontrada - verifique o arquivo SQL.")
     finally:
         if conn:
             conn.close()
@@ -204,7 +204,7 @@ def step_quick_check(creds: dict) -> None:
 
 def main():
     print("=" * 55)
-    print("  Carga de Dados — classicmodels lab")
+    print("  Carga de Dados - classicmodels lab")
     print("=" * 55)
 
     sql_file = LOCAL_SQL
