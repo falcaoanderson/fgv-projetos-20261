@@ -8,13 +8,13 @@ import os
 import sys
 import mysql.connector
 
-# ─────────────────────────────────────────────
+# ---------------------------------------------
 # CONFIGURAÇÕES
-# ─────────────────────────────────────────────
+# ---------------------------------------------
 CREDENTIALS_FILE = "rds_credentials.json"
 DB_NAME = "classicmodels"
 
-# Tabelas esperadas com contagem mínima de linhas (ref: dump oficial)
+# Tabelas esperadas com contagem mínima de linhas
 EXPECTED_TABLES: dict[str, int] = {
     "customers":         100,
     "employees":          23,
@@ -25,7 +25,60 @@ EXPECTED_TABLES: dict[str, int] = {
     "productlines":        4,
     "products":          110,
 }
-# ─────────────────────────────────────────────
+
+# Checks de integridade referencial (órfãos)
+# Cada tupla: (descrição, query que deve retornar 0 registros órfãos)
+FK_CHECKS: list[tuple[str, str]] = [
+    (
+        "orders.customerNumber -> customers",
+        """
+        SELECT COUNT(*) FROM orders o
+        LEFT JOIN customers c ON o.customerNumber = c.customerNumber
+        WHERE c.customerNumber IS NULL
+        """,
+    ),
+    (
+        "orderdetails.orderNumber -> orders",
+        """
+        SELECT COUNT(*) FROM orderdetails od
+        LEFT JOIN orders o ON od.orderNumber = o.orderNumber
+        WHERE o.orderNumber IS NULL
+        """,
+    ),
+    (
+        "orderdetails.productCode -> products",
+        """
+        SELECT COUNT(*) FROM orderdetails od
+        LEFT JOIN products p ON od.productCode = p.productCode
+        WHERE p.productCode IS NULL
+        """,
+    ),
+    (
+        "payments.customerNumber -> customers",
+        """
+        SELECT COUNT(*) FROM payments p
+        LEFT JOIN customers c ON p.customerNumber = c.customerNumber
+        WHERE c.customerNumber IS NULL
+        """,
+    ),
+    (
+        "products.productLine -> productlines",
+        """
+        SELECT COUNT(*) FROM products p
+        LEFT JOIN productlines pl ON p.productLine = pl.productLine
+        WHERE pl.productLine IS NULL
+        """,
+    ),
+    (
+        "employees.officeCode -> offices",
+        """
+        SELECT COUNT(*) FROM employees e
+        LEFT JOIN offices o ON e.officeCode = o.officeCode
+        WHERE o.officeCode IS NULL
+        """,
+    ),
+]
+# -----------------------------------
 
 
 def load_credentials(filepath: str) -> dict:
@@ -55,16 +108,13 @@ def section(title: str) -> None:
     print(f"{'─'*55}")
 
 
-def check_tables(cur) -> tuple[list[str], list[str]]:
-    """Retorna (tabelas_presentes, tabelas_faltando)."""
+def check_tables(cur) -> tuple[list[str], list[str], list[str]]:
     cur.execute("SHOW TABLES;")
     found = {row[0].lower() for row in cur.fetchall()}
     expected = set(EXPECTED_TABLES.keys())
-
     present = sorted(found & expected)
     extra   = sorted(found - expected)
     missing = sorted(expected - found)
-
     return present, extra, missing
 
 
@@ -79,8 +129,24 @@ def check_row_counts(cur, tables: list[str]) -> dict[str, dict]:
     return results
 
 
+def check_foreign_keys(cur) -> list[dict]:
+    """
+    NOVO: verifica integridade referencial buscando registros órfãos.
+    Cada check deve retornar 0 para passar.
+    """
+    results = []
+    for desc, query in FK_CHECKS:
+        try:
+            cur.execute(query)
+            orphans = cur.fetchone()[0]
+            ok = orphans == 0
+            results.append({"name": desc, "orphans": orphans, "ok": ok})
+        except mysql.connector.Error as e:
+            results.append({"name": desc, "orphans": -1, "ok": False, "error": str(e)})
+    return results
+
+
 def check_sample_queries(cur) -> list[dict]:
-    """Executa queries de negócio para validar integridade referencial."""
     queries = [
         {
             "name":  "Receita total por linha de produto",
@@ -115,7 +181,6 @@ def check_sample_queries(cur) -> list[dict]:
             """,
         },
     ]
-
     results = []
     for q in queries:
         try:
@@ -125,15 +190,13 @@ def check_sample_queries(cur) -> list[dict]:
             results.append({"name": q["name"], "cols": cols, "rows": rows, "ok": True})
         except mysql.connector.Error as e:
             results.append({"name": q["name"], "error": str(e), "ok": False})
-
     return results
 
 
 def print_table(cols: list[str], rows: list[tuple]) -> None:
-    """Imprime resultado de query em formato tabular simples."""
     widths = [max(len(str(c)), max((len(str(r[i])) for r in rows), default=0))
               for i, c in enumerate(cols)]
-    sep = "  " + "  ".join("-" * w for w in widths)
+    sep    = "  " + "  ".join("-" * w for w in widths)
     header = "  " + "  ".join(str(c).ljust(w) for c, w in zip(cols, widths))
     print(header)
     print(sep)
@@ -151,7 +214,6 @@ def main():
     print(f"  Banco   : {DB_NAME}")
     print(f"  Usuário : {creds['username']}")
 
-    # ── Conexão ──────────────────────────────
     try:
         conn = connect(creds)
         cur = conn.cursor()
@@ -161,7 +223,7 @@ def main():
 
     all_ok = True
 
-    # ── 1. Tabelas ───────────────────────────
+    # -- 1. Tabelas ---------------------
     section("1. Verificação de tabelas")
     present, extra, missing = check_tables(cur)
 
@@ -174,15 +236,15 @@ def main():
     if extra:
         print(f"     Tabelas extras (não esperadas): {', '.join(extra)}")
 
-    # ── 2. Contagem de linhas ─────────────────
+    # -- 2. Contagem de linhas ---------
     section("2. Contagem de linhas por tabela")
     counts = check_row_counts(cur, present)
 
-    col_w = max(len(t) for t in present) + 2
+    col_w = max(len(t) for t in present) + 2 if present else 14
     print(f"  {'Tabela'.ljust(col_w)} {'Esperado':>10}  {'Encontrado':>10}  Status")
     print(f"  {'─'*col_w} {'─'*10}  {'─'*10}  {'─'*6}")
     for table, info in counts.items():
-        status = "OK OK" if info["ok"] else "X BAIXO"
+        status = "OK" if info["ok"] else "X BAIXO"
         if not info["ok"]:
             all_ok = False
         print(
@@ -190,8 +252,22 @@ def main():
             f"{info['actual']:>10}  {status}"
         )
 
-    # ── 3. Queries de negócio ─────────────────
-    section("3. Queries de integridade / negócio")
+    # -- 3. Integridade referencial (FK) -----
+    section("3. Integridade referencial (órfãos)")
+    fk_results = check_foreign_keys(cur)
+
+    for r in fk_results:
+        if r.get("error"):
+            all_ok = False
+            print(f"  X {r['name']}: erro — {r['error']}")
+        elif r["ok"]:
+            print(f"  OK {r['name']}: sem órfãos")
+        else:
+            all_ok = False
+            print(f"  X {r['name']}: {r['orphans']} registro(s) órfão(s)")
+
+    # -- 4. Queries de negócio --------------
+    section("4. Queries de integridade / negócio")
     sample_results = check_sample_queries(cur)
 
     for qr in sample_results:
@@ -202,7 +278,7 @@ def main():
             all_ok = False
             print(f"  X Erro: {qr['error']}")
 
-    # ── Resultado final ───────────────────────
+    # -- Resultado final ------------------
     section("RESULTADO FINAL")
     if all_ok:
         print("  OK Banco classicmodels validado com sucesso!")
