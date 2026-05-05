@@ -161,14 +161,70 @@ def _ensure_ingress_rule(ec2, sg_id: str, my_cidr: str) -> None:
             raise
 
 
+def get_or_create_db_subnet_group(rds, ec2, vpc_id: str, group_name: str) -> str:
+    """
+    Obtém ou cria um DB subnet group para a VPC especificada.
+    Necessário para evitar conflitos com subnet groups em VPCs deletadas.
+    """
+    try:
+        resp = rds.describe_db_subnet_groups(DBSubnetGroupName=group_name)
+        subnet_group_id = resp["DBSubnetGroups"][0]["DBSubnetGroupName"]
+        print(f"  DB subnet group já existe: {subnet_group_id}")
+        return subnet_group_id
+    except ClientError:
+        pass  # não existe, vamos criar
+
+    # Obtém subnets disponíveis na VPC
+    subnets = ec2.describe_subnets(
+        Filters=[{"Name": "vpc-id", "Values": [vpc_id]}]
+    )["Subnets"]
+
+    if not subnets:
+        raise RuntimeError(
+            f"Nenhuma subnet encontrada na VPC {vpc_id}. "
+            "Verifique a configuração da VPC."
+        )
+
+    subnet_ids = [subnet["SubnetId"] for subnet in subnets]
+    print(f"  Criando DB subnet group com {len(subnet_ids)} subnet(s)...")
+
+    rds.create_db_subnet_group(
+        DBSubnetGroupName=group_name,
+        DBSubnetGroupDescription="Subnet group para RDS classicmodels lab",
+        SubnetIds=subnet_ids,
+        Tags=[{"Key": "Project", "Value": "classicmodels-lab"}],
+    )
+    print(f"  DB subnet group criado: {group_name}")
+    return group_name
+
+
 def provision_rds(cfg: dict) -> dict:
     session = boto3.Session(region_name=cfg["region"])
     rds = session.client("rds")
     ec2 = session.client("ec2")
 
+    # Obtém a VPC para usar com security group e DB subnet group
+    vpcs_default = ec2.describe_vpcs(
+        Filters=[{"Name": "isDefault", "Values": ["true"]}]
+    )["Vpcs"]
+    if vpcs_default:
+        vpc_id = vpcs_default[0]["VpcId"]
+    else:
+        vpcs_all = ec2.describe_vpcs()["Vpcs"]
+        if not vpcs_all:
+            raise RuntimeError(
+                "Nenhuma VPC encontrada. Verifique sua configuração AWS."
+            )
+        vpc_id = vpcs_all[0]["VpcId"]
+
     sg_name = f"{cfg['db_instance_id']}-sg"
     print(f"\n[1/3] Configurando security group '{sg_name}'...")
     sg_id = get_or_create_security_group(ec2, sg_name)
+
+    # Cria DB subnet group para a VPC
+    subnet_group_name = f"{cfg['db_instance_id']}-subnet-group"
+    print(f"  Configurando DB subnet group '{subnet_group_name}'...")
+    get_or_create_db_subnet_group(rds, ec2, vpc_id, subnet_group_name)
 
     # Verifica se a instância já existe
     try:
@@ -211,6 +267,7 @@ def provision_rds(cfg: dict) -> dict:
         AllocatedStorage=cfg["allocated_storage"],
         PubliclyAccessible=cfg["publicly_accessible"],
         VpcSecurityGroupIds=[sg_id],
+        DBSubnetGroupName=subnet_group_name,
         BackupRetentionPeriod=0,   # sem backups automáticos (lab)
         MultiAZ=False,
         Tags=[{"Key": "Project", "Value": "classicmodels-lab"}],
