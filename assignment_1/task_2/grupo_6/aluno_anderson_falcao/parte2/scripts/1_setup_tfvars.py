@@ -9,11 +9,11 @@ import sys
 from pathlib import Path
 from dotenv import load_dotenv
 
-load_dotenv(os.path.join("..", "..", ".env"))
+load_dotenv(os.path.join("..", ".env"))
 
 # --- Configuraçoes ---------------------------------------------------------------
 CREDENTIALS_FILE = os.path.join("..", "rds_credentials.json")  # ajuste se necessario
-OUTPUT_FILE      = os.path.join("terraform.tfvars") # ajuse se necessario
+OUTPUT_FILE      = os.path.join("terraform", "terraform.tfvars") # ajuse se necessario
 REGION           = "us-east-1"
 PROJECT_NAME     = "classicmodels"
 

@@ -1,17 +1,4 @@
-# Task 2 — Pipeline ETL com AWS Glue
-
-## Estrutura dos arquivos
-
-```
-task2/
-├── main.tf                  # Infraestrutura Terraform (S3, Glue Job, SGs, etc.)
-├── variables.tf             # Variáveis do Terraform
-├── outputs.tf               # Outputs do Terraform
-├── terraform.tfvars.example
-├── 1_setup_tfvars.py        # Gera terraform.tfvars a partir dos arquivos da Task 1
-├── 2_glue_etl_job.py        # Script PySpark do Glue (ETL)
-└── 3_validate_etl.py        # Validação do pipeline
-```
+# Task 2 - Pipeline ETL com AWS Glue
 
 ---
 
@@ -29,7 +16,7 @@ O script lê o `rds_credentials.json` (gerado na Task 1) e o `.env`:
 
 ```bash
 # Certifique-se de que o .env está acessível e o rds_credentials.json existe
-python 1_setup_tfvars.py
+python scripts/1_setup_tfvars.py
 ```
 
 > Ajuste a variável `CREDENTIALS_FILE` no topo do script se o arquivo estiver em outro local.
@@ -53,7 +40,7 @@ O Terraform irá criar:
 ### 4. Exportar outputs do Terraform
 
 ```bash
-terraform output -json > tf_outputs.json
+terraform output -json > ../tf_outputs.json
 ```
 
 O script de validação usa este arquivo para encontrar o bucket e o job name.
@@ -62,25 +49,25 @@ O script de validação usa este arquivo para encontrar o bucket e o job name.
 
 **Opção A — Disparar o job e validar em sequência (recomendado):**
 ```bash
-python 3_validate_etl.py --trigger
+python scripts/3_validate_etl.py --trigger
 ```
 
 **Opção B — Disparar manualmente pelo console da AWS e depois validar:**
 ```bash
 # Aguarda o run mais recente e valida
-python 3_validate_etl.py
+python scripts/3_validate_etl.py
 ```
 
 **Opção C — Via AWS CLI:**
 ```bash
 aws glue start-job-run --job-name classicmodels-etl-job --region us-east-1
 # Acompanhe no console ou use o script de validação
-python 3_validate_etl.py --skip-wait
+python scripts/3_validate_etl.py --skip-wait
 ```
 
 **Dry run (sem efeito real):**
 ```bash
-python 3_validate_etl.py --dry-run
+python scripts/3_validate_etl.py --dry-run
 ```
 
 ---
@@ -125,27 +112,12 @@ python 3_validate_etl.py --dry-run
 
 ---
 
-## Segurança (Diretrizes do professor)
+## Segurança
 
 - **Zero 0.0.0.0/0 em Ingress**: SG do Glue usa apenas self-referencing
 - **Egress restrito**: apenas porta 443 (HTTPS para AWS APIs) e 3306 para o SG do RDS
 - **Zero hardcode**: credenciais via `TF_VAR_*` / `terraform.tfvars` + `.env`
-- **LabRole**: usa a role pré-existente do AWS Academy (sem criar novas roles IAM)
+- **LabRole**: usa a role pré-existente do AWS Academy
 - **VPC Endpoint S3**: tráfego S3 não sai pela internet
 
 ---
-
-## Troubleshooting
-
-**Glue Job falha com erro de conexão JDBC:**
-- Verifique se o RDS está disponível: `aws rds describe-db-instances`
-- Confirme que a regra de SG foi criada: `terraform show`
-- O RDS precisa estar `publicly_accessible=true` para ser acessível via VPC da mesma conta
-
-**Glue Job falha com `FAILED` sem mensagem clara:**
-- Abra o Glue console → Jobs → seu job → aba "Logs"
-- Os logs do CloudWatch ficam em `/aws-glue/jobs/output`
-
-**`terraform apply` falha em `aws_security_group_rule`:**
-- O SG do RDS (`classicmodels-db-sg`) precisa existir (Task 1 deve estar concluída)
-- Execute `python 1_provision_rds.py` antes se necessário

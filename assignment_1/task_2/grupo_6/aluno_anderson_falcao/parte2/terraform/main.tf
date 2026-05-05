@@ -71,8 +71,8 @@ resource "aws_s3_bucket_public_access_block" "etl" {
 resource "aws_s3_object" "glue_script" {
   bucket = aws_s3_bucket.etl.id
   key    = "scripts/2_glue_etl_job.py"
-  source = "${path.module}/2_glue_etl_job.py"
-  etag   = filemd5("${path.module}/2_glue_etl_job.py")
+  source = "${path.module}/../scripts/2_glue_etl_job.py"
+  etag   = filemd5("${path.module}/../scripts/2_glue_etl_job.py")
 }
 
 # -- VPC Gateway Endpoint para S3 -------------------------------------------------

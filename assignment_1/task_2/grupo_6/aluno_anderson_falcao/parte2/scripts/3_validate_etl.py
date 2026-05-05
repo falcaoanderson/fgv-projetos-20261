@@ -30,7 +30,7 @@ load_dotenv()
 # --- Configurações ---------------------------------------------------------------
 CONFIG = {
     "region":             "us-east-1",
-    "credentials_file":   "rds_credentials.json",
+    "credentials_file":   os.path.join("..", "rds_credentials.json"),
     "glue_job_name":      "classicmodels-etl-job",   # atualizado pelo setup_tfvars
     "expected_entities":  [
         "fact_orders",
@@ -111,7 +111,7 @@ def load_infra_config(dry_run: bool) -> tuple[str, str]:
     s3_bucket = None
 
     # Tenta ler do arquivo de output do terraform (se existir)
-    tf_output_file = "tf_outputs.json"
+    tf_output_file = os.path.join("tf_outputs.json")
     if os.path.exists(tf_output_file):
         tf_out = load_json_file(tf_output_file)
         glue_job  = tf_out.get("glue_job_name", {}).get("value", glue_job)
