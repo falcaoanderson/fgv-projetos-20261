@@ -55,7 +55,8 @@ resource "aws_s3_bucket_public_access_block" "athena_results" {
 
 # Workgroup do Athena dedicado para a Task 3
 resource "aws_athena_workgroup" "analytics" {
-  name = "${var.project_name}-analytics-workgroup"
+  name          = "${var.project_name}-analytics-workgroup"
+  force_destroy = true
 
   configuration {
     result_configuration {
